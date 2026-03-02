@@ -29,7 +29,14 @@ def load_model():
 
 model = load_model()
 
-ALL_CLASSES = ["Bloom Flower", "Wilted Flower", "Immature Green", "Mature Green", "Turning", "Light Red", "Red", "Damaged"]
+# Updated to match your new 5-class model
+ALL_CLASSES = [
+    "bloom flowers", 
+    "green", 
+    "turning", 
+    "red", 
+    "damaged tomatoes"
+]
 
 # 4. HEADER
 st.title("🍅 Greenhouse Intelligence System")
