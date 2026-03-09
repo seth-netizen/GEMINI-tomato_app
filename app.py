@@ -1,103 +1,45 @@
 import streamlit as st
-from ultralytics import YOLO
-from PIL import Image
-import numpy as np
+import requests
+import ast
 import pandas as pd
-import plotly.express as px  # Professional interactive charts
 
-# 1. PAGE CONFIG
-st.set_page_config(
-    page_title="Agri-Vision: Greenhouse Intelligence",
-    layout="wide",
-    page_icon="🍅"
-)
+# 1. Configuration - Replace with your GitHub username and repo name
+USER = "seth-netizen"
+REPO = "GEMINI-tomato_app"
+FILE = "status.txt"
+URL = f"https://raw.githubusercontent.com/{USER}/{REPO}/main/{FILE}"
 
-# 2. ENHANCED CSS (Mobile Optimized)
-st.markdown("""
-<style>
-    .main { background-color: #f0f4f0; }
-    .stMetric { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .report-box { padding: 20px; border-radius: 15px; color: white; margin-bottom: 10px; }
-    h1, h2, h3 { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Tomato Yield Scout", page_icon="🍅")
 
-# 3. LOAD MODEL
-@st.cache_resource
-def load_model():
-    return YOLO("best.pt")
+st.title("🍅 Greenhouse Yield Dashboard")
+st.write("Real-time monitoring from Meru University Greenhouse")
 
-model = load_model()
+def fetch_data():
+    try:
+        # We add a random parameter to the URL to bypass GitHub's cache
+        response = requests.get(f"{URL}?nocache={st.timestamp()}")
+        if response.status_code == 200:
+            return ast.literal_eval(response.text)
+    except:
+        return None
+    return None
 
-# Updated to match your new 5-class model
-ALL_CLASSES = [
-    "bloom flowers", 
-    "green", 
-    "turning", 
-    "red", 
-    "damaged tomatoes"
-]
+# 2. Display the Data
+data = fetch_data()
 
-# 4. HEADER
-st.title("🍅 Greenhouse Intelligence System")
-st.markdown("---")
-
-# 5. INPUT SECTION
-tab1, tab2 = st.tabs(["📁 Batch Upload", "📸 Live Camera"])
-with tab1:
-    uploaded_files = st.file_uploader("Upload greenhouse images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-with tab2:
-    camera_photo = st.camera_input("Capture greenhouse image")
-
-images_to_process = []
-if uploaded_files: images_to_process = [Image.open(f) for f in uploaded_files]
-elif camera_photo: images_to_process = [Image.open(camera_photo)]
-
-# 6. DETECTION
-if images_to_process:
-    master_counts = {cls: 0 for cls in ALL_CLASSES}
-
-    for idx, img in enumerate(images_to_process):
-        results = model(img)
-        plotted = results[0].plot()[:, :, ::-1]
-        st.image(plotted, caption=f"Analysis View {idx+1}", use_column_width=True)
-
-        for box in results[0].boxes:
-            cls_name = results[0].names[int(box.cls)]
-            master_counts[cls_name] = master_counts.get(cls_name, 0) + 1
-
-    # 7. ANALYTICS
-    st.markdown("## 📊 Yield Analytics")
-    df = pd.DataFrame(list(master_counts.items()), columns=["Stage", "Count"])
-    total_detected = df["Count"].sum()
+if data:
+    # Show high-level metrics
+    cols = st.columns(3)
+    cols[0].metric("Red (Ready)", data.get("red", 0))
+    cols[1].metric("Turning", data.get("turning", 0))
+    cols[2].metric("Damaged ⚠️", data.get("damaged tomatoes", 0))
     
-    # KPIs (Key Performance Indicators) for the Professor
-    kpi1, kpi2, kpi3 = st.columns(3)
-    kpi1.metric("Total Detected", total_detected)
-    kpi2.metric("Harvest Ready (Red)", master_counts.get("Red", 0))
-    kpi3.metric("Health Alerts", master_counts.get("Damaged", 0), delta_color="inverse")
+    # Show a full breakdown table
+    st.subheader("Full Crop Breakdown")
+    df = pd.DataFrame(list(data.items()), columns=['Stage', 'Count'])
+    st.bar_chart(df.set_index('Stage'))
+else:
+    st.warning("Waiting for data from Raspberry Pi...")
 
-    # 8. PIE & BAR CHART (Interactive)
-    col_chart1, col_chart2 = st.columns(2)
-    with col_chart1:
-        fig_pie = px.pie(df, values='Count', names='Stage', title="Ripeness Profile", hole=0.4)
-        st.plotly_chart(fig_pie, use_container_width=True)
-    with col_chart2:
-        st.bar_chart(df.set_index("Stage"))
-
-    # 9. HARVEST ADVISORY
-    st.markdown("---")
-    st.header("🌾 Harvest Advisory Report")
-    
-    red_count = master_counts.get("Red", 0)
-    harvest_ratio = (red_count / total_detected * 100) if total_detected > 0 else 0
-
-    if harvest_ratio >= 60:
-        st.success(f"**Action: Harvest Immediately.** {harvest_ratio:.1f}% crop maturity reached.")
-    elif harvest_ratio >= 30:
-        st.warning(f"**Action: Selective Harvesting.** {harvest_ratio:.1f}% maturity. Monitor daily.")
-    else:
-        st.info(f"**Action: Growth Phase.** {harvest_ratio:.1f}% maturity. Estimated 5-7 days to harvest.")
-
-    if master_counts.get("Damaged", 0) > 0:
-        st.error(f"🚨 **Urgent:** {master_counts['Damaged']} damaged tomatoes found. Check for pests or calcium deficiency.")
+if st.button('🔄 Refresh Live Data'):
+    st.rerun()
