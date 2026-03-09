@@ -1,6 +1,2 @@
-ultralytics
-streamlit
-pillow
-numpy
-opencv-python-headless
-plotly
+requests
+pandas
