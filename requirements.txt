@@ -1,2 +1,5 @@
-requests
+streamlit
+ultralytics
+opencv-python-headless
 pandas
+
