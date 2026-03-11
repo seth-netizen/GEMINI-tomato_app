@@ -1,53 +1,39 @@
 import streamlit as st
-import cv2
 from ultralytics import YOLO
 import numpy as np
+from PIL import Image
 
-# Load the AI Brain
+# Load your 4th-year project model
 model = YOLO('best.pt') 
 
-st.title("🍅 AI Greenhouse Scout: Live Video Mode")
-st.write("Point your camera at the tomatoes to start real-time detection.")
+st.title("🍅 Greenhouse Scout: Live AI Mode")
 
-# Setup for counts
-if 'counts' not in st.session_state:
-    st.session_state.counts = {"bloom": 0, "green": 0, "turning": 0, "red": 0, "damaged": 0}
+# Use Streamlit's built-in camera widget for better mobile compatibility
+img_file = st.camera_input("Take a photo or scan tomatoes")
 
-# Camera Input
-run_video = st.toggle('Start Greenhouse Camera')
-FRAME_WINDOW = st.image([]) # This will hold the video feed
+if img_file:
+    # Convert the file to an image the AI can read
+    img = Image.open(img_file)
+    img_array = np.array(img)
 
-cam = cv2.VideoCapture(0) # 0 is the default camera
-
-while run_video:
-    ret, frame = cam.read()
-    if not ret:
-        st.error("Camera not found.")
-        break
-
-    # 1. Physics & AI: Run YOLO on the current frame
-    results = model.predict(frame, conf=0.5) # conf=0.5 for stability
+    # Run YOLO detection
+    results = model(img_array)
     
-    # 2. Draw boxes on the frame
+    # Draw the bounding boxes (Bloom, Green, Red, etc.)
     annotated_frame = results[0].plot()
     
-    # 3. Math: Calculate current counts
-    class_ids = results[0].boxes.cls.astype(int).tolist()
+    # Display the result
+    st.image(annotated_frame, caption="AI Detection Results")
+    
+    # Show counts for your presentation
+    counts = results[0].boxes.cls.tolist()
     names = results[0].names
-    current_counts = {names[i]: class_ids.count(i) for i in set(class_ids)}
+    report = {names[int(c)]: counts.count(c) for c in set(counts)}
     
-    # Update display
-    FRAME_WINDOW.image(annotated_frame, channels="BGR")
-    
-    # 4. Display Live Metrics
-    st.subheader("Live Yield Count")
-    cols = st.columns(len(st.session_state.counts))
-    for i, (label, _) in enumerate(st.session_state.counts.items()):
-        val = current_counts.get(label, 0)
-        cols[i].metric(label.upper(), val)
-    
-    total = sum(current_counts.values())
-    st.markdown(f"### **Total Detected: {total}**")
-
-else:
-    st.info("Camera is off. Toggle the switch above to start.")
+    st.subheader("Yield Analysis")
+    cols = st.columns(len(report) if report else 1)
+    if report:
+        for i, (label, count) in enumerate(report.items()):
+            cols[i].metric(label.upper(), count)
+    else:
+        st.write("No tomatoes detected in this frame.")
