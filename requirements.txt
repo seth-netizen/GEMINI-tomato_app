@@ -1,26 +1,96 @@
-# Web interface
-streamlit==1.55.0
+import streamlit as st
+import cv2
+import numpy as np
+from ultralytics import YOLO
+import tempfile
 
-# YOLO / Ultralytics
-ultralytics==8.4.21
-ultralytics-thop==2.0.18
+# 1. Professional Page Setup
+st.set_page_config(page_title="AI Greenhouse Scout", page_icon="🍅", layout="wide")
 
-# Torch backend
-torch==2.10.0
-torchvision==0.25.0
+# Dark Theme Styling
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; }
+    .stMetric { background-color: #161b22; border: 1px solid #30363d; padding: 10px; border-radius: 10px; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# OpenCV for video/image processing
-opencv-python==4.13.0.92
-opencv-python-headless==4.13.0.92
+@st.cache_resource
+def load_model():
+    return YOLO("best.pt")
 
-# Image handling
-Pillow==12.1.1
+model = load_model()
 
-# Array computations
-numpy==2.4.3
+st.title("🍅 Live Greenhouse AI Vision")
+st.markdown("### Real-time Object Tracking & Yield Counting")
 
-# Data manipulation & charts
-pandas==2.3.3
+# --- SIDEBAR CONTROLS ---
+st.sidebar.header("🕹️ Sensitivity Control")
+conf_threshold = st.sidebar.slider("Confidence", 0.1, 1.0, 0.30)
+st.sidebar.info("High confidence = fewer errors. Low confidence = finds small flowers.")
 
-# Optional: progress bar for video frames
-tqdm==4.66.1
+# --- VIDEO UPLOAD ---
+uploaded_video = st.file_uploader("📂 Upload Greenhouse Walkthrough (MP4/MOV)", type=["mp4", "mov", "avi"])
+
+if uploaded_video:
+    # Save to a temporary file so OpenCV can read it
+    tfile = tempfile.NamedTemporaryFile(delete=False)
+    tfile.write(uploaded_video.read())
+    
+    # Initialize Video Capture
+    vid = cv2.VideoCapture(tfile.name)
+    
+    # LAYOUT: Video on left, Live Metrics on right
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # This 'empty' container is the secret to real-time updates
+        frame_window = st.empty() 
+    
+    with col2:
+        st.subheader("📊 Live Counts")
+        # Placeholders for metrics that update every frame
+        total_stat = st.empty()
+        class_stats = st.empty()
+
+    # --- THE REAL-TIME LOOP ---
+    while vid.isOpened():
+        ret, frame = vid.read()
+        if not ret:
+            break
+        
+        # RUN TRACKING: persist=True remembers tomatoes across frames
+        # tracker="bytetrack.yaml" is what car detectors use
+        results = model.track(frame, conf=conf_threshold, persist=True, tracker="bytetrack.yaml", verbose=False)
+        
+        # Draw boxes on the frame
+        annotated_frame = results[0].plot()
+        
+        # Convert BGR (OpenCV) to RGB (Streamlit)
+        frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+        
+        # 1. Update the Video Feed
+        frame_window.image(frame_rgb, use_column_width=True)
+        
+        # 2. Update the Metrics on the right
+        if results[0].boxes.id is not None:
+            ids = results[0].boxes.id.cpu().numpy().astype(int)
+            classes = results[0].boxes.cls.cpu().numpy().astype(int)
+            names = results[0].names
+            
+            # Update Total
+            total_stat.metric("Tomatoes in View", len(ids))
+            
+            # Update Class Breakdown (e.g., Mature vs Green)
+            counts_text = ""
+            unique_classes = np.unique(classes)
+            for c in unique_classes:
+                count = (classes == c).sum()
+                counts_text += f"**{names[c].upper()}:** {count}  \n"
+            class_stats.markdown(counts_text)
+
+    vid.release()
+    st.success("✅ Video Analysis Finished")
+
+else:
+    st.info("Please upload a video to start the live detection tracking.")
