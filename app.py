@@ -16,7 +16,7 @@ st.write("Scan tomatoes in your greenhouse and get instant yield analysis.")
 # Model Download Section
 # -------------------------
 
-MODEL_URL = "PASTE_YOUR_MODEL_LINK_HERE"
+MODEL_URL = "https://drive.google.com/file/d/1hOszfUyWzqEnH484qE_OBi1R4Q5njDVh/view?usp=drive_link"
 MODEL_PATH = "best.pt"
 
 if not os.path.exists(MODEL_PATH):
