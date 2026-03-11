@@ -2,38 +2,148 @@ import streamlit as st
 from ultralytics import YOLO
 import numpy as np
 from PIL import Image
+import pandas as pd
+from collections import Counter
+import urllib.request
+import os
 
-# Load your 4th-year project model
-model = YOLO('best.pt') 
+st.set_page_config(page_title="Greenhouse Scout AI", layout="wide")
 
-st.title("🍅 Greenhouse Scout: Live AI Mode")
+st.title("🍅 Greenhouse Scout: Tomato Detection AI")
+st.write("Scan tomatoes in your greenhouse and get instant yield analysis.")
 
-# Use Streamlit's built-in camera widget for better mobile compatibility
-img_file = st.camera_input("Take a photo or scan tomatoes")
+# -------------------------
+# Model Download Section
+# -------------------------
 
-if img_file:
-    # Convert the file to an image the AI can read
-    img = Image.open(img_file)
-    img_array = np.array(img)
+MODEL_URL = "PASTE_YOUR_MODEL_LINK_HERE"
+MODEL_PATH = "best.pt"
 
-    # Run YOLO detection
-    results = model(img_array)
-    
-    # Draw the bounding boxes (Bloom, Green, Red, etc.)
-    annotated_frame = results[0].plot()
-    
-    # Display the result
-    st.image(annotated_frame, caption="AI Detection Results")
-    
-    # Show counts for your presentation
-    counts = results[0].boxes.cls.tolist()
-    names = results[0].names
-    report = {names[int(c)]: counts.count(c) for c in set(counts)}
-    
-    st.subheader("Yield Analysis")
-    cols = st.columns(len(report) if report else 1)
-    if report:
-        for i, (label, count) in enumerate(report.items()):
-            cols[i].metric(label.upper(), count)
+if not os.path.exists(MODEL_PATH):
+    st.info("Downloading AI model...")
+    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+    st.success("Model downloaded successfully!")
+
+# -------------------------
+# Load Model (cached)
+# -------------------------
+
+@st.cache_resource
+def load_model():
+    model = YOLO(MODEL_PATH)
+    return model
+
+model = load_model()
+
+# -------------------------
+# Sidebar Controls
+# -------------------------
+
+st.sidebar.title("⚙️ Settings")
+
+confidence = st.sidebar.slider(
+    "Detection Confidence",
+    min_value=0.1,
+    max_value=1.0,
+    value=0.25
+)
+
+mode = st.sidebar.radio(
+    "Select Image Source",
+    ["Camera", "Upload Image"]
+)
+
+# -------------------------
+# Image Input
+# -------------------------
+
+image = None
+
+if mode == "Camera":
+    camera_image = st.camera_input("Take a photo of tomatoes")
+    if camera_image:
+        image = Image.open(camera_image)
+
+else:
+    uploaded_file = st.file_uploader(
+        "Upload a greenhouse image",
+        type=["jpg", "jpeg", "png"]
+    )
+
+    if uploaded_file:
+        image = Image.open(uploaded_file)
+
+# -------------------------
+# Detection Section
+# -------------------------
+
+if image:
+
+    img_array = np.array(image)
+
+    st.subheader("Original Image")
+    st.image(image, use_column_width=True)
+
+    with st.spinner("Running AI detection..."):
+
+        results = model(img_array, conf=confidence)
+
+        annotated_frame = results[0].plot()
+
+    st.subheader("Detection Results")
+    st.image(annotated_frame, use_column_width=True)
+
+    # -------------------------
+    # Yield Analysis
+    # -------------------------
+
+    st.subheader("🍅 Yield Analysis")
+
+    if results[0].boxes is not None and len(results[0].boxes) > 0:
+
+        classes = results[0].boxes.cls.cpu().numpy().astype(int)
+        names = results[0].names
+
+        counts = Counter(classes)
+
+        # Display metrics
+        cols = st.columns(len(counts))
+
+        for i, (cls_id, count) in enumerate(counts.items()):
+            cols[i].metric(names[cls_id].upper(), count)
+
+        # -------------------------
+        # Chart Visualization
+        # -------------------------
+
+        data = {
+            "Class": [names[c] for c in counts.keys()],
+            "Count": [counts[c] for c in counts.keys()]
+        }
+
+        df = pd.DataFrame(data)
+
+        st.subheader("Detection Distribution")
+        st.bar_chart(df.set_index("Class"))
+
+        # -------------------------
+        # Harvest Insight
+        # -------------------------
+
+        st.subheader("🌱 Harvest Insight")
+
+        total = sum(counts.values())
+
+        st.write(f"Total tomatoes detected: **{total}**")
+
+        # Example assumption: class 3 = red tomatoes
+        ripe = counts.get(3, 0)
+
+        if ripe > 0:
+            st.success(f"{ripe} tomatoes are ready for harvest.")
+        else:
+            st.warning("No ripe tomatoes detected.")
+
     else:
-        st.write("No tomatoes detected in this frame.")
+
+        st.warning("No tomatoes detected in this image.")
