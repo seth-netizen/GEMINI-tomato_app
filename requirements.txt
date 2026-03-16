@@ -1,5 +1,5 @@
-streamlit
 ultralytics
 opencv-python-headless
-lapx
-
+flask
+pandas
+numpy<2
