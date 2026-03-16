@@ -26,7 +26,7 @@ def generate_frames():
         
         # AI with dynamic Confidence
         results = model.track(frame, persist=True, tracker="bytetrack.yaml", 
-                              imgsz=320, conf=conf_threshold, verbose=False)
+                              imgsz=160, conf=conf_threshold, verbose=False)
         
         if results[0].boxes.id is not None:
             ids = results[0].boxes.id.int().cpu().tolist()
