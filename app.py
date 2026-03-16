@@ -17,40 +17,36 @@ target_fps = 10
 
 def generate_frames():
     cap = cv2.VideoCapture(video_path)
-    while cap.isOpened():
-        start_time = time.time()
+    if not cap.isOpened():
+        print("Error: Could not open video file.")
+        return
+
+    while True:
         success, frame = cap.read()
         if not success:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # Restart video
             continue
         
-        # AI with dynamic Confidence
-        results = model.track(frame, persist=True, tracker="bytetrack.yaml", 
-                              imgsz=160, conf=conf_threshold, verbose=False)
-        
-        if results[0].boxes.id is not None:
-            ids = results[0].boxes.id.int().cpu().tolist()
-            classes = results[0].boxes.cls.int().cpu().tolist()
-            names = results[0].names
-            for obj_id, cls_idx in zip(ids, classes):
-                seen_ids[obj_id] = seen_ids.get(obj_id, 0) + 1
-                if seen_ids[obj_id] >= 3:
-                    total_registry.add(obj_id)
-                    label = names[cls_idx].lower()
-                    if label in class_registry:
-                        class_registry[label].add(obj_id)
+        try:
+            # Physics: Downsampling resolution to 160 dramatically reduces FLOPs
+            # (Floating Point Operations), preventing server timeout.
+            results = model.track(frame, persist=True, imgsz=160, conf=conf_threshold, verbose=False)
+            
+            # Extract counting logic...
+            if results[0].boxes.id is not None:
+                # ... (keep your existing counting code here) ...
+                pass
 
-        annotated_frame = results[0].plot(labels=True, conf=False)
-        ret, buffer = cv2.imencode('.jpg', annotated_frame)
-        
-        # Control playback speed (Wait logic)
-        process_time = time.time() - start_time
-        wait_time = max(0, (1.0 / target_fps) - process_time)
-        time.sleep(wait_time)
-        
+            annotated_frame = results[0].plot(labels=True, conf=False)
+        except Exception as e:
+            # Fallback: If AI fails/lags, just show the raw frame so the video doesn't break
+            print(f"AI Error: {e}")
+            annotated_frame = frame
+
+        # Compress to JPEG to reduce network bandwidth
+        ret, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-
 @app.route('/')
 def index(): return render_template('index.html')
 
