@@ -6,7 +6,7 @@ import time
 app = Flask(__name__)
 
 model = YOLO("best.pt")
-video_path = "VID_20260312_153546.mp4"
+video_path = "VID_20260312_153546 - Trim.mp4"
 
 # Global System State
 total_registry = set()
