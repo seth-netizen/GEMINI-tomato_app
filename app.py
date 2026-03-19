@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, Response, jsonify, request
 import cv2
 from ultralytics import YOLO
@@ -5,10 +6,11 @@ import time
 
 app = Flask(__name__)
 
+# 1. Configuration (Relative paths for Render)
 model = YOLO("best.pt")
-video_path = "tomato_video.mp4"
+video_path = "tomato_video.mp4" # ENSURE FILE IS RENAMED IN GITHUB
 
-# Global System State
+# 2. Global State (Physics: State Integration over Time)
 total_registry = set()
 class_registry = {k: set() for k in ["bloom flowers", "green", "turning", "red", "damaged tomatoes"]}
 seen_ids = {}
@@ -18,54 +20,66 @@ target_fps = 10
 def generate_frames():
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        print("Error: Could not open video file.")
+        print(f"FAILED TO OPEN: {video_path}")
         return
 
     while True:
         success, frame = cap.read()
         if not success:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # Restart video
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
         
         try:
-            # Physics: Downsampling resolution to 160 dramatically reduces FLOPs
-            # (Floating Point Operations), preventing server timeout.
-            results = model.track(frame, persist=True, imgsz=160, conf=conf_threshold, verbose=False)
+            # Physics: imgsz=160 minimizes FLOPs to stay under Render CPU limits
+            results = model.track(frame, persist=True, tracker="bytetrack.yaml", 
+                                  imgsz=160, conf=conf_threshold, verbose=False)
             
-            # Extract counting logic...
             if results[0].boxes.id is not None:
-                # ... (keep your existing counting code here) ...
-                pass
+                ids = results[0].boxes.id.int().cpu().tolist()
+                classes = results[0].boxes.cls.int().cpu().tolist()
+                names = results[0].names
+                
+                for obj_id, cls_idx in zip(ids, classes):
+                    # Filtering for persistence
+                    seen_ids[obj_id] = seen_ids.get(obj_id, 0) + 1
+                    if seen_ids[obj_id] >= 3:
+                        total_registry.add(obj_id)
+                        label = names[cls_idx].lower()
+                        if label in class_registry:
+                            class_registry[label].add(obj_id)
 
             annotated_frame = results[0].plot(labels=True, conf=False)
         except Exception as e:
-            # Fallback: If AI fails/lags, just show the raw frame so the video doesn't break
-            print(f"AI Error: {e}")
+            print(f"AI INFERENCE ERROR: {e}")
             annotated_frame = frame
 
-        # Compress to JPEG to reduce network bandwidth
-        ret, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+        # JPEG Compression (Quality 40 minimizes packet size for mobile viewing)
+        ret, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 40])
+        frame_bytes = buffer.tobytes()
+        
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
 @app.route('/')
-def index(): return render_template('index.html')
+def index():
+    return render_template('index.html')
 
 @app.route('/video_feed')
-def video_feed(): return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/get_stats')
 def get_stats():
-    # Make sure keys here match the IDs in the HTML (bloom, green, turning, red, damaged)
-    stats = {
-        'bloom flowers': len(class_registry.get('bloom flowers', set())), # Match your specific YOLO name
-        'green': len(class_registry.get('green', set())),
-        'turning': len(class_registry.get('turning', set())),
-        'red': len(class_registry.get('red', set())),
-        'damaged': len(class_registry.get('damaged tomatoes', set())), # Match your specific YOLO name
+    # Syncing dictionary keys with your index.html IDs
+    return jsonify({
+        'bloom': len(class_registry['bloom flowers']),
+        'green': len(class_registry['green']),
+        'turning': len(class_registry['turning']),
+        'red': len(class_registry['red']),
+        'damaged': len(class_registry['damaged tomatoes']),
         'total': len(total_registry)
-    }
-    return jsonify(stats)
-# Route to update settings from the web sliders
+    })
+
 @app.route('/update_settings', methods=['POST'])
 def update_settings():
     global conf_threshold, target_fps
@@ -75,4 +89,6 @@ def update_settings():
     return jsonify(success=True)
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    # Physics: Dynamic port allocation for Cloud Hosting
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)

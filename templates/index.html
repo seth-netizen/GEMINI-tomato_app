@@ -7,26 +7,25 @@
         body { font-family: sans-serif; background: #121212; color: white; padding: 10px; margin: 0; overflow: hidden; }
         .card { background: #1e1e1e; padding: 12px; border-radius: 12px; max-width: 800px; margin: auto; height: 95vh; display: flex; flex-direction: column; }
         
-        /* Fixed height for video to prevent scrolling */
-        .video-box { width: 100%; height: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; border: 1px solid #333; }
-        img { max-height: 100%; width: auto; display: block; }
+        /* Fixed height for video: 'contain' ensures we see the whole plant, 'background' hides the gaps */
+        .video-box { width: 100%; height: 55%; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; border: 1px solid #333; background: #000; }
+        img { max-height: 100%; width: 100%; object-fit: contain; display: block; }
 
         .total-banner { background: #2e7d32; padding: 8px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 1.2em; margin: 10px 0; }
         
-        /* 3-column grid for the 5 classes */
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
-        .stat { background: #2a2a2a; padding: 8px; border-radius: 6px; text-align: center; font-size: 0.85em; }
+        .stat { background: #2a2a2a; padding: 8px; border-radius: 6px; text-align: center; font-size: 0.8em; }
         .val { display: block; font-size: 1.3em; font-weight: bold; margin-top: 3px; }
 
-        .controls { background: #252525; padding: 10px; border-radius: 8px; flex-grow: 1; }
-        .slider-row { margin-bottom: 12px; }
-        label { font-size: 0.9em; color: #aaa; display: flex; justify-content: space-between; }
+        .controls { background: #252525; padding: 10px; border-radius: 8px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+        .slider-row { margin-bottom: 8px; }
+        label { font-size: 0.85em; color: #aaa; display: flex; justify-content: space-between; }
         input[type=range] { width: 100%; cursor: pointer; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h3 style="margin: 0 0 10px 0; text-align: center; font-size: 1.1em;">🍅 Meru University AI Scout</h3>
+        <h3 style="margin: 0 0 8px 0; text-align: center; font-size: 1.1em;">🍅 Meru University AI Scout</h3>
         
         <div class="video-box">
             <img src="{{ url_for('video_feed') }}">
@@ -35,11 +34,11 @@
         <div class="total-banner">TOTAL YIELD: <span id="total">0</span></div>
 
         <div class="stats-grid">
-            <div class="stat">BLOOM FLOWERS <span class="val" id="bloom flowers" style="color:#ffd700">0</span></div>
+            <div class="stat">BLOOM <span class="val" id="bloom" style="color:#ffd700">0</span></div>
             <div class="stat">GREEN <span class="val" id="green" style="color:#4caf50">0</span></div>
             <div class="stat">TURNING <span class="val" id="turning" style="color:#ff9800">0</span></div>
             <div class="stat">RED <span class="val" id="red" style="color:#ff5252">0</span></div>
-            <div class="stat" style="grid-column: span 2;">DAMAGED <span class="val" id="damaged tomatoes" style="color:#888">0</span></div>
+            <div class="stat" style="grid-column: span 2;">DAMAGED <span class="val" id="damaged" style="color:#888">0</span></div>
         </div>
 
         <div class="controls">
@@ -69,6 +68,7 @@
 
         setInterval(() => {
             fetch('/get_stats').then(r => r.json()).then(data => {
+                // Ensure these match the keys sent by your Python get_stats() function
                 document.getElementById('total').innerText = data.total;
                 document.getElementById('bloom').innerText = data.bloom;
                 document.getElementById('green').innerText = data.green;

@@ -3,3 +3,4 @@ opencv-python-headless
 flask
 pandas
 numpy<2
+gunicorn
