@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # 1. Configuration (Relative paths for Render)
 model = YOLO("best.pt")
-video_path = "tomato_video.mp4" # ENSURE FILE IS RENAMED IN GITHUB
+video_path = "tomato_video1.mp4" # ENSURE FILE IS RENAMED IN GITHUB
 
 # 2. Global State (Physics: State Integration over Time)
 total_registry = set()
