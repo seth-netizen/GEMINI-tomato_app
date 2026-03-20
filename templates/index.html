@@ -7,19 +7,23 @@
         body { font-family: sans-serif; background: #121212; color: white; padding: 10px; margin: 0; overflow: hidden; }
         .card { background: #1e1e1e; padding: 12px; border-radius: 12px; max-width: 800px; margin: auto; height: 95vh; display: flex; flex-direction: column; }
         
-        /* Fixed height for video: 'contain' ensures we see the whole plant, 'background' hides the gaps */
-        .video-box { width: 100%; height: 55%; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; border: 1px solid #333; background: #000; }
+        /* Fixed height for video: 'contain' ensures we see the whole plant */
+        .video-box { width: 100%; height: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; border: 1px solid #333; background: #000; margin-bottom: 5px; }
         img { max-height: 100%; width: 100%; object-fit: contain; display: block; }
 
-        .total-banner { background: #2e7d32; padding: 8px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 1.2em; margin: 10px 0; }
+        .upload-section { margin-bottom: 8px; }
+        .upload-btn { width: 100%; background: #007bff; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em; transition: 0.3s; }
+        .upload-btn:hover { background: #0056b3; }
+
+        .total-banner { background: #2e7d32; padding: 6px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 1.1em; margin: 5px 0; }
         
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
-        .stat { background: #2a2a2a; padding: 8px; border-radius: 6px; text-align: center; font-size: 0.8em; }
-        .val { display: block; font-size: 1.3em; font-weight: bold; margin-top: 3px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+        .stat { background: #2a2a2a; padding: 6px; border-radius: 6px; text-align: center; font-size: 0.75em; }
+        .val { display: block; font-size: 1.2em; font-weight: bold; margin-top: 2px; }
 
         .controls { background: #252525; padding: 10px; border-radius: 8px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
-        .slider-row { margin-bottom: 8px; }
-        label { font-size: 0.85em; color: #aaa; display: flex; justify-content: space-between; }
+        .slider-row { margin-bottom: 6px; }
+        label { font-size: 0.8em; color: #aaa; display: flex; justify-content: space-between; }
         input[type=range] { width: 100%; cursor: pointer; }
     </style>
 </head>
@@ -27,8 +31,15 @@
     <div class="card">
         <h3 style="margin: 0 0 8px 0; text-align: center; font-size: 1.1em;">🍅 Meru University AI Scout</h3>
         
+        <div class="upload-section">
+            <input type="file" id="video_input" accept="video/*" style="display: none;" onchange="uploadVideo()">
+            <button class="upload-btn" onclick="document.getElementById('video_input').click()">
+                📂 ANALYZE FROM GALLERY / CAMERA
+            </button>
+        </div>
+
         <div class="video-box">
-            <img src="{{ url_for('video_feed') }}">
+            <img id="video_feed_img" src="{{ url_for('video_feed') }}">
         </div>
 
         <div class="total-banner">TOTAL YIELD: <span id="total">0</span></div>
@@ -38,7 +49,7 @@
             <div class="stat">GREEN <span class="val" id="green" style="color:#4caf50">0</span></div>
             <div class="stat">TURNING <span class="val" id="turning" style="color:#ff9800">0</span></div>
             <div class="stat">RED <span class="val" id="red" style="color:#ff5252">0</span></div>
-            <div class="stat" style="grid-column: span 2;">DAMAGED <span class="val" id="damaged" style="color:#888">0</span></div>
+            <div class="stat" style="grid-column: span 2;">DAMAGED <span class="val" id="damaged" style="color:#ff4444">0</span></div>
         </div>
 
         <div class="controls">
@@ -54,6 +65,39 @@
     </div>
 
     <script>
+        // NEW: Function to handle video upload
+        function uploadVideo() {
+            let file = document.getElementById('video_input').files[0];
+            if(!file) return;
+
+            let formData = new FormData();
+            formData.append('file', file);
+            
+            // Temporary UI feedback
+            let btn = document.querySelector('.upload-btn');
+            let originalText = btn.innerText;
+            btn.innerText = "⏳ UPLOADING & ANALYZING...";
+            btn.style.background = "#555";
+
+            fetch('/upload_video', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    // Refresh the image stream to start new video
+                    let img = document.getElementById('video_feed_img');
+                    img.src = "{{ url_for('video_feed') }}?t=" + new Date().getTime();
+                }
+                btn.innerText = originalText;
+                btn.style.background = "#007bff";
+            }).catch(err => {
+                alert("Upload failed. Check server logs.");
+                btn.innerText = originalText;
+                btn.style.background = "#007bff";
+            });
+        }
+
         function updateSettings() {
             let fps = document.getElementById('fps_slider').value;
             let conf = document.getElementById('conf_slider').value;
@@ -68,7 +112,6 @@
 
         setInterval(() => {
             fetch('/get_stats').then(r => r.json()).then(data => {
-                // Ensure these match the keys sent by your Python get_stats() function
                 document.getElementById('total').innerText = data.total;
                 document.getElementById('bloom').innerText = data.bloom;
                 document.getElementById('green').innerText = data.green;
